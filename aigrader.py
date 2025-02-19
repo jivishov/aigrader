@@ -5,11 +5,9 @@ from io import IOBase
 from anthropic import Anthropic
 from PIL import Image
 import io
-
+from fpdf import FPDF
 
 st.set_page_config(page_title="AI Grader", page_icon="📚", layout="wide")
-
-
 
 def get_uploaded_images(uploaded_files: List[IOBase]) -> List[str]:
     """Convert uploaded files to base64 encoded images"""
@@ -50,9 +48,68 @@ def az_file_uploader(container, index):
         img_container.image(tempfile, use_container_width=True)
         img_container.divider()
 
+def save_and_download_pdf(claude_response, fullname):
+    class PDF(FPDF):
+        def __init__(self):
+            super().__init__()
+            self.set_auto_page_break(auto=True, margin=15)
+            
+        def header(self):
+            # Use Arial which is built into FPDF
+            self.set_font('Arial', 'B', 12)
+            self.cell(0, 10, 'AI Grader Report', 0, 1, 'C')
+
+        def footer(self):
+            self.set_y(-15)
+            self.set_font('Arial', 'I', 8)
+            self.cell(0, 10, f'Page {self.page_no()}', 0, 0, 'C')
+
+    # Create PDF object
+    pdf = PDF()
+    pdf.add_page()
+    
+    # Add title
+    pdf.set_font('Arial', 'B', 12)
+    pdf.cell(0, 10, 'Grading Report', 0, 1, 'L')
+    pdf.ln(5)
+    
+    # Add content with proper encoding
+    pdf.set_font('Arial', '', 12)
+    # Split text into paragraphs and encode properly
+    paragraphs = claude_response.split('\n')
+    for para in paragraphs:
+        if para.strip():  # Only process non-empty paragraphs
+            # Encode special characters
+            encoded_text = para.encode('latin-1', 'replace').decode('latin-1')
+            pdf.multi_cell(0, 10, encoded_text)
+            pdf.ln(5)
+
+    # Generate safe filename
+    safe_name = ''.join(c for c in fullname if c.isalnum() or c in (' ','-','_')).strip()
+    pdf_output = f"grading_report_{safe_name}.pdf"
+    
+    try:
+        # Save PDF to memory instead of file
+        pdf_data = pdf.output(dest='S').encode('latin-1')
+        
+        # Create download button
+        st.download_button(
+            label="Download Grading Report",
+            data=pdf_data,
+            file_name=pdf_output,
+            mime="application/pdf"
+        )
+    except Exception as e:
+        st.error(f"Error generating PDF: {str(e)}")
+
 def anthropic_grader_norubric(image_list):
     client = Anthropic(api_key=st.secrets["CLAUDE_API_KEY"],)
-    image_prompt="Attached are student responses to FRQ in AP Chemistry. Please evaluate the responses, assign a score based on the rubric with justification."
+    image_prompt="""Attached are student responses to FRQ in AP Chemistry.
+    First, read a question, then provide solution. 
+    Second, read student response and evaluate it based on your solution and justify it. 
+    Third, assign a score for the response with justification.
+    After finishing whole grading provide total score with percentage.
+    And at last, provide feedback on the response and suggestions for improvement."""
 
     messages = [
         {"role": "user",
@@ -112,15 +169,16 @@ with st.container(key="main_form"):
         )
     
     if grading_clicked:
-        uploaded_files, mime_types = process_uploaded_files()
-        if not uploaded_files:
-            st.toast("#### Please upload at least one image of your paper to start grading.",icon=":material/warning:")
-            st.stop()
-        try:
-            image_list = get_uploaded_images(uploaded_files)
-            claude_response = anthropic_grader_norubric(image_list)
-            st.write(claude_response)
-        except Exception as e:
-            st.error(f"An error occurred: {e}")
-            st.stop()
+        with st.spinner("Grading your papers..."):
+            uploaded_files, mime_types = process_uploaded_files()
+            if not uploaded_files:
+                st.toast("#### Please upload at least one image of your paper to start grading.",icon=":material/warning:")
+                st.stop()
+            try:
+                image_list = get_uploaded_images(uploaded_files)
+                claude_response = anthropic_grader_norubric(image_list)
+                save_and_download_pdf(claude_response, fullname)
+            except Exception as e:
+                st.error(f"An error occurred: {e}")
+                st.stop()
         
