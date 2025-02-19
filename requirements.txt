@@ -1,3 +1,4 @@
 anthropic
 pillow
 typing-extensions
+fpdf
