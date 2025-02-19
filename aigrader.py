@@ -178,6 +178,7 @@ with st.container(key="main_form"):
                 image_list = get_uploaded_images(uploaded_files)
                 claude_response = anthropic_grader_norubric(image_list)
                 save_and_download_pdf(claude_response, fullname)
+                st.markdown(claude_response)
             except Exception as e:
                 st.error(f"An error occurred: {e}")
                 st.stop()
