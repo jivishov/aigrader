@@ -2,3 +2,4 @@ anthropic
 pillow
 typing-extensions
 fpdf
+streamlit_pdf_viewer
