@@ -466,7 +466,7 @@ with st.container(key="main_form"):
                 
                 claude_response = anthropic_grader_norubric_pdf(pdf_list)
             
-                save_and_download_pdf(claude_response, fullname)
+                save_and_download_pdf(claude_response, "Student")
                 
             except Exception as e:
                 st.error(f"An error occurred: {e}")
